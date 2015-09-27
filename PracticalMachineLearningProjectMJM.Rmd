@@ -53,7 +53,7 @@ Initially, I tried to subset out a bunch of the variables to only use a few in a
 ```
 Let's look at a couple of the predictors graphically to see if we can fruther eliminate variables or find variables which have a large correlation with the exercise error classification.  
 
-```{r "plots", echo = TRUE}
+```{r "plots", echo = FALSE}
   print(qplot(roll_belt, total_accel_belt, colour = classe, data = training))
   print(qplot(roll_arm, total_accel_arm, colour = classe, data = training))
   
