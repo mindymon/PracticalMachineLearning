@@ -54,8 +54,8 @@ Initially, I tried to subset out a bunch of the variables to only use a few in a
 Let's look at a couple of the predictors graphically to see if we can fruther eliminate variables or find variables which have a large correlation with the exercise error classification.  
 
 ```{r "plots", echo = TRUE}
-  qplot(roll_belt, total_accel_belt, colour = classe, data = training)
-  qplot(roll_arm, total_accel_arm, colour = classe, data = training)
+  print(qplot(roll_belt, total_accel_belt, colour = classe, data = training))
+  print(qplot(roll_arm, total_accel_arm, colour = classe, data = training))
   
 ```
 
@@ -122,7 +122,7 @@ pml_write_files(answers)
 Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6. 
 
 ###Appendix containing failed attempt at limiting the variables
-<!---
+
 As we can see from our table, a significant number of the variables are "mostly" NAs: the dataset has ```{r, echo = FALSE} nrows(dataset)``` and each of the columns reporting NAs have 19216 each.  While this may not disqualify those variables from being considered for use in the model, we should examine what those variables are to make sure we aren't including or excluding data inappropriately. Since we are looking at a prediction model, our first step will be to remove variables that provide little or no insight, are less vaulable to our prediction model, or are contained in other variables. As we have summary statistics available, we will utilize those to reduce the size and complexity of our dataset, rather than using all of the data points that contribute to those statistics.   We will also keep the numbered row, user name, and classe variables.  
 ```{r, echo = FALSE}
 ## Create the new dataset starting with numbered column, user_name, and classe
@@ -218,4 +218,3 @@ qplot(var_accel_dumbbell, var_roll_dumbbell, colour = classe, data = training)
 
 ```
 Those two variables create a single cluster with a lot of scatter outside of that cluster.  Since we have no real strong predictors, we will want to consider additive models.  
---->
