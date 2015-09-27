@@ -1,0 +1,221 @@
+---
+title: 'Practical Machine Learning - Project #1'
+author: "Mindy Montgomery"
+date: "September 25, 2015"
+output: html_document
+---
+
+#Overview
+Using the Weight Lifting Exercise Dataset, we will develop a model that attempts to predict how well a given participant performed a weightlifting exercise.  Full details of the dataset can be found at http://groupware.les.inf.puc-rio.br/har.  Full citation for the dataset and associated information can be found at the end of this document.
+
+Using the data set, we will develop a model that predicts "classe", based on selected features in the data.  As described in the source website, the decriptions of the "classe" factors are as follows:
+
+A - exercise performed exactly according to the specification
+B - error - throwing elbows to the front
+C - error - lifting the dumbbell only halfway 
+D - error - lowering the dumbbell only halfway
+E - error - throwing the hips to the front
+
+#Preliminary Data Investigation
+In looking at the data set and reading the documentation associated with it, we see there are a large number of variables and data points included.  Key to developing a good model will be selecting the correct number of these variables (there are 160 to choose from) that will reasonably predict which exercises in the test set were done correctly.  
+```{r "load data", echo = FALSE}
+## Read in the raw data
+dataset = read.csv("pml-training.csv", na.strings = c("NA", ""))
+dim(dataset)
+
+## Examine the NAs
+na_count <-sapply(dataset, function(y) sum(length(which(is.na(y)))))
+na_count <- data.frame(na_count)
+summary(na_count)
+
+## Get rid of the columns with NA in them
+dataForModel <- dataset[, colSums(is.na(dataset)) == 0]
+dim(dataForModel)
+
+## Reduce the size of the data set by taking the time-based and user name columns.
+dataForModel = dataForModel[ ,8:60]
+
+## Getting data for the dumbbell and belt information
+dataForModel = dataForModel[ ,grep("total|roll|classe", colnames(dataForModel))]
+
+```
+
+Initially, I tried to subset out a bunch of the variables to only use a few in an attempt to avoid overfitting and to attempt to replicate what was found in the associated paper.  Unfortunetaly, I did something wrong in my subsetting of the data and got this error: "Error: variables ‘avg_roll_belt’, ‘max_roll_belt’, ‘var_accel_arm’, ‘var_accel_forearm’, ‘amplitude_roll_arm’, ‘amplitude_roll_forearm’, ‘var_accel_dumbbell’, ‘var_roll_dumbbell’, ‘amplitude_roll_dumbbell’ were specified with different types from the fit".  I'm including my code at the end of the document as an appendix.  This time, I'm going to examine a subset of variables (with the NAs removed) and the time and user-name based variables removed.  After multiple attempts to run the random forest and GBM models with the data set of 53, 27, and 14 variables (all data, dumbbell and magnenometer data, and just dumbbell data, respectively), I took another look at the data set and observed that there were totals for some of the variables, which will considerably reduce the data set.  Since there are not totals for all of the variables, I will use the totals and the "roll" variables to build the model, which reduces the number of predictors down to 8.
+
+```{r "split data", echo = TRUE}
+  library(caret)
+  library(kernlab)
+  inTrain <- createDataPartition(y=dataForModel$classe, p = .6, list = FALSE)
+  training <- dataForModel[inTrain,]
+  testing <- dataForModel[-inTrain,]
+  dim(training)
+  dim(testing)
+```
+Let's look at a couple of the predictors graphically to see if we can fruther eliminate variables or find variables which have a large correlation with the exercise error classification.  
+
+```{r "plots", echo = TRUE}
+  qplot(roll_belt, total_accel_belt, colour = classe, data = training)
+  qplot(roll_arm, total_accel_arm, colour = classe, data = training)
+  
+```
+
+#Training the Model
+Based on our analysis, we are going to select the Random Forest as our prediction algorithm for our dataset.  We've trained the models above and will use these models on the data we held out as the test set to verify what the training data tells us.  
+In picking models, we will look at a Random Forest using all of the other variables to predict "classe".
+```{r "random forest", echo = TRUE}
+  library(randomForest)
+  set.seed(125)
+  randomForestModel <- randomForest(classe ~., data = dataForModel, ntree = 500, keep.forest = TRUE, importance = TRUE)
+  print(randomForestModel)
+
+```
+As we can see from the output of the Random Forest model, we have an accuracy of approximately 96%, based on all of the predictors.  
+
+#Testing the Model
+We will apply our Random Forest model to our test set of data.  
+```{r "test RF", echo = TRUE}
+    
+  RFPrediction = predict(randomForestModel, testing)
+  summary(RFPrediction)
+  
+```
+
+#Running against the Test Data
+Now we're ready to run one of our models against the provided test data and then sumbit our results to the course website.  
+```{r "run testing data", echo = TRUE}
+  ## Read in the test data set
+  dataToPredict <- read.csv("pml-testing.csv")
+  ## Run the prediction algorithm against the provided test set
+  predictedData <- predict(randomForestModel, dataToPredict)
+```
+#Out of Sample Error
+We will now calculate our out of sample error rate
+```{r, "OOS error", echo = TRUE}
+  dim(testing)
+  OOSErrorAcc = sum(RFPrediction == testing$classe)/length(RFPrediction)
+  print(OOSErrorAcc)
+  OOSError = 1 - OOSErrorAcc
+  print(OOSError)
+```
+Based on this, our model looks to be pretty good!
+
+Now we will write the contents of our prediction vector to separate files per the submission instructions.
+```{r "write predicitons to files", echo = TRUE}
+## Create vector of answers from prediction  
+answers <- c(as.character(predictedData))
+  
+## Writing the files for submission to the Coursera website for Practical Machine Learning
+pml_write_files = function(x) {
+    n = length(x)
+    for (i in 1:n) {
+        filename = paste0("problem_id_", i, ".txt")
+        write.table(x[i], file = filename, quote = FALSE, row.names = FALSE, 
+            col.names = FALSE)
+    }
+}
+
+pml_write_files(answers)
+
+
+```
+###Full Citation
+Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6. 
+
+###Appendix containing failed attempt at limiting the variables
+<!---
+As we can see from our table, a significant number of the variables are "mostly" NAs: the dataset has ```{r, echo = FALSE} nrows(dataset)``` and each of the columns reporting NAs have 19216 each.  While this may not disqualify those variables from being considered for use in the model, we should examine what those variables are to make sure we aren't including or excluding data inappropriately. Since we are looking at a prediction model, our first step will be to remove variables that provide little or no insight, are less vaulable to our prediction model, or are contained in other variables. As we have summary statistics available, we will utilize those to reduce the size and complexity of our dataset, rather than using all of the data points that contribute to those statistics.   We will also keep the numbered row, user name, and classe variables.  
+```{r, echo = FALSE}
+## Create the new dataset starting with numbered column, user_name, and classe
+subDataSet = dataset[ , 1:2]
+subDataSet2 = dataset[ ,160]
+subDataSet3 = cbind(subDataSet,subDataSet2)
+
+## Add summary statistic variables - mean, variance, max, min, amplitude
+meanDataSubset <- dataset[ ,grep("avg", colnames(dataset))]
+maxDataSubset <- dataset[ ,grep("max", colnames(dataset))]
+minDataSubset <- dataset[ ,grep("min", colnames(dataset))]
+varDataSubset <- dataset[ ,grep("var", colnames(dataset))]
+ampDataSubset <- dataset[ ,grep("amplitude", colnames(dataset))]
+
+## Merge all of the datasets into one
+subdataSetCombo <- cbind(subDataSet3, meanDataSubset, maxDataSubset, minDataSubset, varDataSubset, ampDataSubset)
+dim(subdataSetCombo)
+summary(subdataSetCombo)
+```
+
+We now have a data frame with all of the summary statistics.  There are still a large number of NAs included in this data frame, but we know that we want to remove those observations since doing so will not alter the remaining data.
+
+```{r, echo = FALSE}
+cleanDataSet <- na.omit(subdataSetCombo)
+dim(cleanDataSet)
+```
+We now have a more reasonable dataset to work with, however 67 variables is still far too many for our model.  We will want to consider the data included to scale back the number of variables.  For my model, I am choosing to remove all "pitch" and "yaw" readings.
+
+```{r, echo = FALSE}
+## Getting rid of pitch, misspelled pitch, and yaw columns
+smallerDataSet <- cleanDataSet[ , -grep("pitch", colnames(cleanDataSet))]
+smallerDataSet1 <- smallerDataSet[ , -grep("picth", colnames(smallerDataSet))]
+smallerDataSet2 <- smallerDataSet1[ , -grep("yaw", colnames(smallerDataSet1))]
+dim(smallerDataSet2)
+```
+Now we're getting somewhere.  We have 406 observations across 27 variables.  Three of the variables don't really count - one is the counter, another the user's name, and the third is the variable we are going to predict in our model.  We will remove the counter and user name variables, as well as some other variables that we determine to be less valuable for the purposes of our model.  
+
+```{r, ECHO = FALSE}
+smallerDataSet3 <- smallerDataSet2[ ,3:27]
+names(smallerDataSet3)[1] <- "classe"
+
+## Subsetting the Belt data
+beltData <- smallerDataSet3[ , grep("belt", colnames(smallerDataSet3))]
+beltData1 <- beltData[ ,1:2]
+allBeltData <- cbind(beltData1)
+
+## Subsetting the Arm data
+armData <- smallerDataSet3[ , grep("arm", colnames(smallerDataSet3))]
+armData1 <-armData[ , grep("accel", colnames(armData))]
+armData2 <-armData[ , grep("amp", colnames(armData))]
+allArmData <- cbind(armData1, armData2)
+
+## Subsetting the Dumbbell data
+dbData <- smallerDataSet3[ , grep("dumbbell", colnames(smallerDataSet3))]
+dbData2 <- dbData[ , 4:6]
+
+## Create new data frame, combine all subsets
+names(smallerDataSet3)[1] <- "classe"
+dataForModel <- smallerDataSet3$classe
+dataForModel <- cbind(dataForModel, allBeltData, allArmData, dbData2)
+names(dataForModel)[1] <- "classe"
+```
+
+#Splitting the Data Set - Training and Testing
+In order to bulid the machine learning algorithm and model, we will need to split the training dataset into two subsets - one for trainging and one for testing.  In order to ensure reproducibilty of results, we will need to set a seed and then split the dataset accordingly.  We will use the suggested 60/40 split, which should still provide a great deal of confidence due to the number of data points included.  
+
+```{r, echo = TRUE}
+library(caret)
+library(kernlab)
+inTrain <- createDataPartition(y=dataForModel$classe, p = .6, list = FALSE)
+training <- dataForModel[inTrain,]
+testing <- dataForModel[-inTrain,]
+dim(training)
+dim(testing)
+```
+
+#Model Determination
+First, let's examine a plot to see if we have any strong predictors of "classe".
+```{r, echo = TRUE}
+qplot(var_accel_arm, var_accel_forearm, colour = classe, data = training)
+
+```
+That plot doesn't really provide any additional insight into the data.  Let's examine another set of variables.
+```{r, echo = TRUE}
+qplot(avg_roll_belt, max_roll_belt, colour = classe, data = training)
+
+```
+This plot is a little bit more interesting.  The data has distinct clusters and for classe = E, there is a strong corrlection between the average and the max roll in the belt.  
+
+Let's consider one more pair of variables: the variance in the acceleration of the dumbbell and the variance in the roll of the dumbbell.  
+```{r, echo = TRUE}
+qplot(var_accel_dumbbell, var_roll_dumbbell, colour = classe, data = training)
+
+```
+Those two variables create a single cluster with a lot of scatter outside of that cluster.  Since we have no real strong predictors, we will want to consider additive models.  
+--->
